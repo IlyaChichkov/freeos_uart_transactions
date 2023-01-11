@@ -56,11 +56,11 @@ def sendDataTest(sendingData: str):
   # split data on bytes
   i = 0
   while i < numOfBytes:
-    if(i > 2):
+    if(i > 5):
       if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
         i -= 1
     else:
-      if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
+      if not sendByteOfDataPackage(uart5Addr, sendingData[8 * i : 8 * i + 8], True):
         i -= 1
     i += 1
 
@@ -71,7 +71,7 @@ def sendData(addr: str, sendingData: str):
   numOfBytes = ceil(len(sendingData) / 8)
   # split data on bytes
   for i in range(numOfBytes):
-    if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
+    if not sendByteOfDataPackage(addr, sendingData[8 * i : 8 * i + 8], True):
       i -= 1
 
 def sendByteOfDataPackage(uart_addr: str, data: str, test_read = True):
@@ -196,13 +196,12 @@ def receivePackage(uart_addr: str, data: str, queue):
     uart5.open()
     while True:
       buf = str(uart5.read())
-      DebugLog("uart5 > Receive bit: ", buf)
       
       if buf != "b''":
-        receivedData += buf
+        receivedData += buf[2:-1]
+        DebugLog("uart3 > Receive bit: ", buf, '  receivedData: ', receivedData)
         DebugLog("received_len: ", received_len)
         if data_len == received_len + 1:
-          DebugLog('Break received')
           break
         received_len += 1
     uart5.close()
