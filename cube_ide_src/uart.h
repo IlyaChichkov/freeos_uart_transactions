@@ -20,10 +20,8 @@ void uart3_handler();
 void uart4_handler();
 void uart5_handler();
 
-void sendPackage();
+void sendPackageData();
 
-void sendData();
-
-void manageIncomePackage();
+void receiveDataHandler();
 
 #endif /* INC_UART_H_ */

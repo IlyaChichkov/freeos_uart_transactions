@@ -69,20 +69,6 @@ const osThreadAttr_t uart4_task_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for uart5_task */
-osThreadId_t uart5_taskHandle;
-const osThreadAttr_t uart5_task_attributes = {
-  .name = "uart5_task",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for uart3_task */
-osThreadId_t uart3_taskHandle;
-const osThreadAttr_t uart3_task_attributes = {
-  .name = "uart3_task",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -98,8 +84,6 @@ static void MX_USART3_UART_Init(void);
 static void MX_UART5_Init(void);
 void StartDefaultTask(void *argument);
 void StartTask02(void *argument);
-void StartTask03(void *argument);
-void StartTask04(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -173,12 +157,6 @@ int main(void)
 
   /* creation of uart4_task */
   uart4_taskHandle = osThreadNew(StartTask02, NULL, &uart4_task_attributes);
-
-  /* creation of uart5_task */
-  uart5_taskHandle = osThreadNew(StartTask03, NULL, &uart5_task_attributes);
-
-  /* creation of uart3_task */
-  uart3_taskHandle = osThreadNew(StartTask04, NULL, &uart3_task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -358,7 +336,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 9600;
+  huart4.Init.BaudRate = 115200;
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;
@@ -562,39 +540,8 @@ void StartTask02(void *argument)
   /* Infinite loop */
 
     //uart3_handler();
-    uart4_handler();
+	uart3_handler();
   /* USER CODE END StartTask02 */
-}
-
-/* USER CODE BEGIN Header_StartTask03 */
-/**
-* @brief Function implementing the uart5_task thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTask03 */
-void StartTask03(void *argument)
-{
-  /* USER CODE BEGIN StartTask03 */
-  /* Infinite loop */
-    uart5_handler();
-  /* USER CODE END StartTask03 */
-}
-
-/* USER CODE BEGIN Header_StartTask04 */
-/**
-* @brief Function implementing the uart3_task thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTask04 */
-void StartTask04(void *argument)
-{
-  /* USER CODE BEGIN StartTask04 */
-  /* Infinite loop */
-  uart3_handler();
-	//writeUart5Data();
-  /* USER CODE END StartTask04 */
 }
 
 /**
