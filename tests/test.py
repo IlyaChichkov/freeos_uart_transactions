@@ -158,15 +158,6 @@ def sendOneBit(dataBit: bytes, bitId = -1):
         uart4.timeout = UART4_READ_TIMEOUT_ERROR
       return False
 
-
-def read_uart():
-    uart3.open()
-    while True:
-      buf = str(uart3.read())
-      print("uart3 > Receive bit: ", buf)
-      
-    uart3.close()
-
 def receivePackage(uart_addr: str, data: str, queue):
   """
   Connect to reader UARTs and get their incoming data to compare with writer data
