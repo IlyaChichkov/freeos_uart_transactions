@@ -1,27 +1,68 @@
 from math import ceil
 import serial as serial
 from multiprocessing import Queue
-from multiprocessing import Process
+import time
+import threading
+from prettytable import PrettyTable
+from prettytable import ALL as ALL
 
 #region Test Functions
 
+receivedTestData = ''
+
+def utf8len(s):
+    return len(s.encode('utf-8'))
 
 def test():
-  test_data = 'hello world! today temperature is -12^C. ___'
+  messageFile = open('tests/send_message.txt', 'r')
+  test_data = messageFile.read()
+
+  dataSize = utf8len(test_data)
+  print("Size: ", dataSize)
+
+  start_time = time.time()
   sendDataTest(test_data)
+  ex_time = (time.time() - start_time)
+
+  print("--- Testing Finished ---")
+
+  speed = dataSize / ex_time
+  missRate = missesCount / sendAttemps
+  packageMissRate = packageMissesCount / packageSendAttemps
+
+  print("Received data:\n%s\n---" % (receivedTestData,))
+
+  t = PrettyTable(header=False)
+  t.hrules = ALL
+  t.title = 'Results'
+  t.add_row(['Size', (str)(dataSize) + ' Bytes'])
+  t.add_row(['Time', (str)(round(ex_time, 4)) + ' seconds'])
+  t.add_row(['Speed', (str)(round(speed, 4)) + ' B\s'])
+  t.add_row(['Package miss rate', packageMissRate])
+  t.add_row(['Package misses count', packageMissesCount])
+  t.add_row(['Package send attemps', packageSendAttemps])
+  t.add_row(['Byte miss rate', missRate])
+  t.add_row(['Byte misses count', missesCount])
+  t.add_row(['Byte send attemps', sendAttemps])
+  print(t)
+
 
 def sendDataTest(sendingData: str):
   """
   Send data string by UART. Switching from one UART to another during transaction.
   """
   numOfBytes = ceil(len(sendingData) / 8)
+  print("Raw data bytes: ", numOfBytes)
   # split data on bytes
-  for i in range(numOfBytes):
+  i = 0
+  while i < numOfBytes:
     if(i > 2):
-      sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8])
+      if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
+        i -= 1
     else:
-      sendByteOfDataPackage(uart5Addr, sendingData[8 * i : 8 * i + 8])
-
+      if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
+        i -= 1
+    i += 1
 
 def sendData(addr: str, sendingData: str):
   """
@@ -30,13 +71,15 @@ def sendData(addr: str, sendingData: str):
   numOfBytes = ceil(len(sendingData) / 8)
   # split data on bytes
   for i in range(numOfBytes):
-    sendByteOfDataPackage(addr, sendingData[8 * i : 8 * i + 8])
-
+    if not sendByteOfDataPackage(uart3Addr, sendingData[8 * i : 8 * i + 8], True):
+      i -= 1
 
 def sendByteOfDataPackage(uart_addr: str, data: str, test_read = True):
   """
   Sending one byte package by UART. Set test_read to true for auto test.
   """
+  global packageSendAttemps
+  packageSendAttemps += 1
 
   package = '0'
   result = False
@@ -47,54 +90,82 @@ def sendByteOfDataPackage(uart_addr: str, data: str, test_read = True):
   queue = Queue() # start queue for sharing data from reading thread
   if test_read:
     queue.put(ret)
-    p1 = Process(target=receivePackage, args=(uart_addr, data, queue), daemon=True)
-    p1.start()
+    thread = threading.Thread(target=receivePackage, args=(uart_addr, data, queue), daemon=True)
+    thread.start()
 
-  print("\nWriting byte...")
+  
+  print("\n> Sending byte...")
   DebugLog("---------------")
-  DebugLog("Send data: ", data)
+  uart4.open()
   while result == False:
     result = sendPackage(package)
+  uart4.close()
 
   if test_read:
-    p1.join()
+    thread.join(3)
+    
     receivedData = queue.get()['data'] # get read data from queue
+    DebugLog("Send data: ", data)
     DebugLog("Receive data: ", receivedData)
     DebugLog("Current uart address: ", uart_addr)
 
     # analyze the response
-    if receivedData == data:
+    if receivedData.replace('\\n', '\n') == data:
+      global receivedTestData
+      receivedTestData += receivedData
       print(" \U00002705 Package sent successfully! ")
+      return True
     else:
+      global packageMissesCount
+      packageMissesCount += 1
       print(" \U0000274C Package failed! ")
+      return False
+  return True
 
 def sendOneBit(dataBit: bytes, bitId = -1):
   """
   Write one bit to UART stream
   """
-  dataBit = bytes(dataBit, 'utf-8')
-  uart4.open()
-  
-  isCompleted = True
-  hasAnswer = False
-
+  lastBit = bitId == 11
   # Send Bit:
   uart4.write(dataBit)
-  ans = uart4.read() # Get answer
-  
-  if ans != b'':
-    hasAnswer = True
 
-  if(bitId == 11 or hasAnswer): # Check answer
-    print("--> Answer: ", ans)
+  start_time = time.time()
+  while 1:
+    ans = uart4.read() # Get answer
+
+    if(ans != b''):        #If we got data
+      DebugLog('Less then ', UART4_TIMEOUT)
+      break    
+    else:
+      if(lastBit):
+        if (time.time() - start_time) > UART4_TIMEOUT_LASTBIT:
+          DebugLog((time.time() - start_time))
+          break
+      else:
+        if (time.time() - start_time) > UART4_TIMEOUT:
+          DebugLog((time.time() - start_time))
+          break
+      
+  if(lastBit or ans != b''): # Check answer
+    DebugLog("--> Answer: ", ans)
 
     if ans == b'1':
-      isCompleted = True
+      uart4.timeout = UART4_READ_TIMEOUT
+      return True # Success
     else:
-      isCompleted = False
+      if lastBit:
+        uart4.timeout = UART4_READ_TIMEOUT_ERROR
+      return False
 
-  uart4.close()
-  return isCompleted
+
+def read_uart():
+    uart3.open()
+    while True:
+      buf = str(uart3.read())
+      print("uart3 > Receive bit: ", buf)
+      
+    uart3.close()
 
 def receivePackage(uart_addr: str, data: str, queue):
   """
@@ -105,14 +176,16 @@ def receivePackage(uart_addr: str, data: str, queue):
   receivedData = ''
   bit: bytes = b''
 
+  ad = 0
+
   if uart_addr == uart3Addr:
     uart3.open()
     while True:
       buf = str(uart3.read())
-      DebugLog("buf: ", buf)
       
       if buf != "b''":
-        receivedData += buf
+        receivedData += buf[2:-1]
+        DebugLog("uart3 > Receive bit: ", buf, '  receivedData: ', receivedData)
         DebugLog("received_len: ", received_len)
         if data_len == received_len + 1:
           break
@@ -123,43 +196,49 @@ def receivePackage(uart_addr: str, data: str, queue):
     uart5.open()
     while True:
       buf = str(uart5.read())
-      DebugLog("buf: ", buf)
+      DebugLog("uart5 > Receive bit: ", buf)
       
       if buf != "b''":
         receivedData += buf
         DebugLog("received_len: ", received_len)
         if data_len == received_len + 1:
+          DebugLog('Break received')
           break
         received_len += 1
     uart5.close()
 
-  print("sent data:     ", data)
-  print("received data: ", receivedData)
-  receivedData = receivedData.replace('b', '').replace("'",'')
+  #receivedData = receivedData.replace('b', '').replace("'",'')
   r = queue.get()
   r['data'] = receivedData
   queue.put(r)
+  return 0
 
 def sendPackage(package):
   """
   Send package, until has positive answer
   """
   for i in range(len(package)):
-      bit: bytes = package[i]
+      bit: bytes = bytes(package[i], 'utf-8')
       
-      print("Send: ", bit)
+      DebugLog("Send: ", bit)
+      global sendAttemps
+      global missesCount
+      DebugLog("sendAttemps: ", sendAttemps)
+      DebugLog("missesCount: ", missesCount)
+      sendAttemps += 1
       if sendOneBit(bit, i) == False:
-        return False
         # try sending package again
-        break
-      else:
-        # package sent successfully
-        return True
+        missesCount += 1
+        return False
+
+  uart4.close()
+  # package sent successfully
+  return True
 
 #endregion
 
 #region Debug
-isDebugMode = True
+isDebugMode = False
 
 def DebugLog(*args):
   if isDebugMode:
@@ -176,28 +255,40 @@ uart3Addr = '01'
 uart5Addr = '00'
 
 # UART 4 Writer
+
+UART4_TIMEOUT             = 0.0000001
+UART4_TIMEOUT_LASTBIT     = 0.03       # default 0.058
+
+UART4_READ_TIMEOUT_ERROR  = 0.011       # default 0.02
+UART4_READ_TIMEOUT        = 0.00000001
+
 uart4 = serial.Serial()
-uart4.baudrate = 9600
+uart4.baudrate = 115200
 uart4.port = 'COM5'
-uart4.timeout = 1
+uart4.timeout = UART4_READ_TIMEOUT
 
 # UART 5 Reader
 uart5 = serial.Serial()
 uart5.baudrate = 115200
 uart5.port = 'COM3'
-uart5.timeout = 1
+uart5.timeout = 0.000001
 
 # UART 5 Reader
 uart3 = serial.Serial()
 uart3.baudrate = 115200
 uart3.port = 'COM4'
-uart3.timeout = 1
+uart3.timeout = 0.000001
 #endregion
 
 #region Main
 # return value from read Process
 ret = { 'data': '' }
 
+sendAttemps = 0
+missesCount = 0
+packageSendAttemps = 0
+packageMissesCount = 0
+missRate = 0
 
 if __name__ == '__main__':
   test()
