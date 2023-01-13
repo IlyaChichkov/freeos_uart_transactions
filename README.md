@@ -15,6 +15,15 @@ stm32 processor core to other UART connected components using simple self-writte
 - Synchronization bits at the start and end of package and checking of success package delivery
 - Connect up to 4 UART slaves and more with little code changes
 
+## Troubleshooting
+
+__Check following points:__
+
+- Wires connections
+- Baudrates both in the terminal and on the microcontroller
+- While adding new tasks check that they aren't empty
+- Try manual microcontroller reseting
+
 ## Build with
 
 - Discovery kit with STM32F303VC MCU
